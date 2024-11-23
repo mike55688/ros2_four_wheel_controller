@@ -44,7 +44,9 @@ void send_data(void);//串口发送协议函数
 void process_and_send_data(char num);
 void receive_and_process_data(void);
 void process_data_and_get_odom(void);
-
+void check_and_stop_vehicle();
+rclcpp::Time last_command_time;  // 用于记录最后一次命令的时间
+bool speed_command_received = false;  // 用于标记是否接收到速度命令
 /*###################################################################################*/  
     double x = 0.0;
 
@@ -65,7 +67,7 @@ void process_data_and_get_odom(void);
 /*###################################################################################*/
 /*###################################################################################*/ 
 
-class TF2publisher : public rclcpp::Node
+class TF2publisher : public rclcpp::Node  //作用：發布地圖框架到基座框架的變換數據，用於 TF2 坐標變換和機器人導航。
 {
 public:
   TF2publisher(): Node("TF2_publisher"), count_(0)
@@ -100,12 +102,12 @@ private:
 /*###################################################################################*/
 /*###################################################################################*/ 
 
-class Pospublisher : public rclcpp::Node
+class Pospublisher : public rclcpp::Node  //發布機器人tf座標括位置 (x, y) 和方向 (theta)。此節點可用於模擬環境中監控機器人的實時位置和方向
 {
 public:
   Pospublisher(): Node("Pos_publisher"), count_(0)
   {
-    publisher_ = this->create_publisher<turtlesim::msg::Pose>("turtle1/pose", 2);
+    publisher_ = this->create_publisher<turtlesim::msg::Pose>("/pose", 2);
     timer_ = this->create_wall_timer(25ms, std::bind(&Pospublisher::timer_callback, this));//40HZ
   }
 private:
@@ -132,7 +134,7 @@ class Velpublisher : public rclcpp::Node
 public:
   Velpublisher(): Node("Vel_publisher"), count_(0)
   {
-    publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("turtle1/cmd_vel", 2);
+    publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 2);
     timer_ = this->create_wall_timer(25ms, std::bind(&Velpublisher::timer_callback, this));//40HZ
   }
 private:
@@ -174,6 +176,8 @@ private:
 /*###################################################################################*/
 int main(int argc, char *argv[])
 {
+  rclcpp::Rate main_loop_rate(10);  // 设置循环频率（例如每秒 10 次）
+
   rclcpp::init(argc, argv);//初始化 ROS2 客户端
 /*
   auto t1 = std::chrono::system_clock::now();// 单位秒
@@ -204,7 +208,7 @@ int main(int argc, char *argv[])
   }
   else
   {
-    return -1;
+    return -1;  
   }
   
   memset(Data_US, 0, sizeof(float)*12);		
@@ -218,6 +222,8 @@ int main(int argc, char *argv[])
   auto node4 = std::make_shared<Velpublisher>();     
       rclcpp::Rate loop_rate(150);//设置循环间隔，即代码执行频率 150 HZ,
       while(rclcpp::ok()){
+           check_and_stop_vehicle();
+
            receive_and_process_data(); //接收并处理来自下位机的数据  
 				
            process_data_and_get_odom();//根据速度姿态信息处理获得里程计数据
@@ -232,7 +238,7 @@ int main(int argc, char *argv[])
                        
           rclcpp::spin_some(node1);//调用spin_some函数，并传入节点对象指针                                             
           process_and_send_data(aa);//处理键盘的指令并发送数据到下位机 
-                          
+       
          loop_rate.sleep();//循环延时时间             
       }
       
@@ -252,7 +258,7 @@ void send_data(void)
     unsigned char tbuf[53];
     unsigned char *p;				
     for(uint8_t i=0;i<len;i++){
-	            p=(unsigned char *)&Data_US[i];
+	      p=(unsigned char *)&Data_US[i];
         tbuf[4*i+4]=(unsigned char)(*(p+3));
         tbuf[4*i+5]=(unsigned char)(*(p+2));
         tbuf[4*i+6]=(unsigned char)(*(p+1));
@@ -277,21 +283,24 @@ void send_data(void)
 //************************处理键盘的指令并发送数据到下位机**************************// 
 //************************处理键盘的指令并发送数据到下位机**************************//  
 void process_and_send_data(char num)
-{        
-         if(num=='u') Flag_move=1;//按键 u 左前
+{       
+    rclcpp::Time now = rclcpp::Clock().now();  // 获取当前时间
+
+ 
+    if(num=='u') Flag_move=1;//按键 u 左前
     else if(num=='i') Flag_move=2;//按键 i 前
     else if(num=='o') Flag_move=3;//按键 o 右前
     
-    else if(num=='j') Flag_move=4;//按键 j 左
+    // else if(num=='j') Flag_move=4;//按键 j 左
     else if(num=='k') Flag_move=0;//按键 k 设置速度为0
-    else if(num=='l') Flag_move=5;//按键 l 右
+    // else if(num=='l') Flag_move=5;//按键 l 右
     
     else if(num=='m') Flag_move=6;//按键 m 左后
     else if(num==',') Flag_move=7;//按键 (,)(<)后
     else if(num=='.') Flag_move=8;//按键 (.)(>)右后
     
-    else if(num=='t') Flag_move=9;//按键 t 逆时针转
-    else if(num=='b') Flag_move=10;//按键 b 顺时针转
+    else if(num=='j') Flag_move=9;//按键 j 逆时针转
+    else if(num=='l') Flag_move=10;//按键 l 顺时针转
     
     else if(num=='q') x_step+=0.05;//按键 q 某轴速度增加++
     else if(num=='z') x_step-=0.05;//按键 a 某轴速度减小--
@@ -315,83 +324,120 @@ void process_and_send_data(char num)
     if(z_step > +0.8)z_step = +0.8;
     if(z_step < -0.8)z_step = -0.8;		
 		
-           if(Flag_move==2){//按下 I 键 //前进
-			               speed_A= x_step;
+
+    // 如果接收到有效速度指令，更新最后指令时间
+    if (Flag_move != 0) {
+        last_command_time = now;  // 记录最后一次指令时间
+        speed_command_received = true;  // 设置为已接收到指令
+    }
+
+    if(Flag_move==2){//按下 I 键 //前进
+			         speed_A= x_step;
 				       speed_B= x_step; 
 				       speed_C= x_step; 
 				       speed_D= x_step; 
 
 		            }
-       else if(Flag_move==7){//按下 < 键 //后退
-			               speed_A= -x_step;
+    else if(Flag_move==7){//按下 < 键 //后退
+			         speed_A= -x_step;
 				       speed_B= -x_step; 
 				       speed_C= -x_step; 
 				       speed_D= -x_step;
 			     }
 
-       else if(Flag_move==9){//按下 T 键//逆时针
-			               speed_A= +x_step;
+    else if(Flag_move==9){//按下 J 键//逆时针
+			         speed_A= +x_step;
 				       speed_B= -x_step; 
 				       speed_C= -x_step; 
 				       speed_D= +x_step; 
 
 			        }
-       else if(Flag_move==10){//按下 B 键//顺时针
-			               speed_A= -x_step;
+    else if(Flag_move==10){//按下 L 键//顺时针
+			         speed_A= -x_step;
 				       speed_B= +x_step; 
 				       speed_C= +x_step; 
 				       speed_D= -x_step;  
 
 			        }
-       else if(Flag_move==1){//按下 U 键//左斜上
-			               speed_A= x_step;
+    else if(Flag_move==1){//按下 U 键//左斜上
+			         speed_A= x_step;
 				       speed_B= x_step*0.7F; 
 				       speed_C= x_step*0.5F; 
 				       speed_D= x_step*0.95F;  
 
 			        }
-       else if(Flag_move==3){//按下 O 键//右斜上
-			               speed_B= x_step;
+    else if(Flag_move==3){//按下 O 键//右斜上
+			         speed_B= x_step;
 				       speed_A= x_step*0.7F; 
 				       speed_D= x_step*0.5F; 
 				       speed_C= x_step*0.95F;
 
 			        }
-	else if(Flag_move==6){//按下 M 键//左斜下
-			               speed_A= -x_step;
+    else if(Flag_move==6){//按下 M 键//左斜下
+			         speed_A= -x_step;
 				       speed_B= -x_step*0.7F; 
 				       speed_C= -x_step*0.5F; 
 				       speed_D= -x_step*0.95F;
 
 			        }
-        else if(Flag_move==8){//按下 > 键//右斜下
-			               speed_B= -x_step;
+    else if(Flag_move==8){//按下 > 键//右斜下
+			         speed_B= -x_step;
 				       speed_A= -x_step*0.7F; 
 				       speed_D= -x_step*0.5F; 
 				       speed_C= -x_step*0.95F; 
 
 			      }
-	else if(Flag_move==0){	       speed_A= 0;
-				       speed_B= 0; 
-				       speed_C= 0; 
-				       speed_D= 0;}//按下 k键//停止
+	  else if(Flag_move==0){	       
+              speed_A= 0;
+              speed_B= 0; 
+              speed_C= 0; 
+              speed_D= 0;}//按下 k键//停止
 			        
-   
-        							  /*<01>*/Data_US[0]  = Flag_start;//电机启动开关，1启动 0停止
-							          /*<02>*/Data_US[1]  = speed_A; 
-							          /*<03>*/Data_US[2]  = speed_B ; 
-							          /*<04>*/Data_US[3]  = speed_C ; 
-							          /*<05>*/Data_US[4]  = speed_D ; //ABCD四轮的当前线速度 m/s
-							          /*<06>*/Data_US[5]  = 0 ;
-							          /*<07>*/Data_US[6]  = 0 ;    
-							          /*<08>*/Data_US[7]  = 0 ;    
-							          /*<09>*/Data_US[8]  = 0 ; 
-							          /*<10>*/Data_US[9]  = 0 ;//预留位  
-							          /*<11>*/Data_US[10] = 0 ;//预留位 
-							          /*<12>*/Data_US[11] = 0 ;//预留位
+
+      /*<01>*/Data_US[0]  = Flag_start;//电机启动开关，1启动 0停止
+      /*<02>*/Data_US[1]  = speed_A; 
+      /*<03>*/Data_US[2]  = speed_B ; 
+      /*<04>*/Data_US[3]  = speed_C ; 
+      /*<05>*/Data_US[4]  = speed_D ; //ABCD四轮的当前线速度 m/s
+      /*<06>*/Data_US[5]  = 0 ;
+      /*<07>*/Data_US[6]  = 0 ;    
+      /*<08>*/Data_US[7]  = 0 ;    
+      /*<09>*/Data_US[8]  = 0 ; 
+      /*<10>*/Data_US[9]  = 0 ;//预留位  
+      /*<11>*/Data_US[10] = 0 ;//预留位 
+      /*<12>*/Data_US[11] = 0 ;//预留位
     if(++FLAG_1==2){
      FLAG_1=0,send_data();} //发送指令控制电机运行               
 }
+
+
+void check_and_stop_vehicle() {
+    rclcpp::Time now = rclcpp::Clock().now();  // 获取当前时间
+
+    // 如果接收到指令，且距离上次指令超过 3 秒，则停止车辆
+    if (speed_command_received) {
+        double elapsed_time = (now - last_command_time).seconds();  // 计算时间间隔
+        std::cout << "[DEBUG] Elapsed time since last command: " << elapsed_time << " seconds" << std::endl;
+
+        if (elapsed_time > 3.0) {
+            // 超时，停止车辆
+            Flag_move = 0;  // 设置为停止状态
+            speed_A = 0;
+            speed_B = 0;
+            speed_C = 0;
+            speed_D = 0;
+
+            // 发送停止命令
+            send_data();
+            std::cout << "[DEBUG] Sending stop command due to timeout." << std::endl;
+
+            // 重置标志
+            speed_command_received = false;
+        }
+    }
+}
+
+
 //************************接收并处理来自下位机的数据**************************// 
 //************************接收并处理来自下位机的数据**************************// 
 //************************接收并处理来自下位机的数据**************************// 
