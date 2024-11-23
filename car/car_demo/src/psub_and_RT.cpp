@@ -44,7 +44,9 @@ void send_data(void);//串口发送协议函数
 void process_and_send_data(char num);
 void receive_and_process_data(void);
 void process_data_and_get_odom(void);
-
+void check_and_stop_vehicle();
+rclcpp::Time last_command_time;  // 用于记录最后一次命令的时间
+bool speed_command_received = false;  // 用于标记是否接收到速度命令
 /*###################################################################################*/  
     double x = 0.0;
 
@@ -174,6 +176,8 @@ private:
 /*###################################################################################*/
 int main(int argc, char *argv[])
 {
+  rclcpp::Rate main_loop_rate(10);  // 设置循环频率（例如每秒 10 次）
+
   rclcpp::init(argc, argv);//初始化 ROS2 客户端
 /*
   auto t1 = std::chrono::system_clock::now();// 单位秒
@@ -218,6 +222,8 @@ int main(int argc, char *argv[])
   auto node4 = std::make_shared<Velpublisher>();     
       rclcpp::Rate loop_rate(150);//设置循环间隔，即代码执行频率 150 HZ,
       while(rclcpp::ok()){
+           check_and_stop_vehicle();
+
            receive_and_process_data(); //接收并处理来自下位机的数据  
 				
            process_data_and_get_odom();//根据速度姿态信息处理获得里程计数据
@@ -232,7 +238,7 @@ int main(int argc, char *argv[])
                        
           rclcpp::spin_some(node1);//调用spin_some函数，并传入节点对象指针                                             
           process_and_send_data(aa);//处理键盘的指令并发送数据到下位机 
-                          
+       
          loop_rate.sleep();//循环延时时间             
       }
       
@@ -277,8 +283,11 @@ void send_data(void)
 //************************处理键盘的指令并发送数据到下位机**************************// 
 //************************处理键盘的指令并发送数据到下位机**************************//  
 void process_and_send_data(char num)
-{        
-         if(num=='u') Flag_move=1;//按键 u 左前
+{       
+    rclcpp::Time now = rclcpp::Clock().now();  // 获取当前时间
+
+ 
+    if(num=='u') Flag_move=1;//按键 u 左前
     else if(num=='i') Flag_move=2;//按键 i 前
     else if(num=='o') Flag_move=3;//按键 o 右前
     
@@ -315,83 +324,120 @@ void process_and_send_data(char num)
     if(z_step > +0.8)z_step = +0.8;
     if(z_step < -0.8)z_step = -0.8;		
 		
-           if(Flag_move==2){//按下 I 键 //前进
+
+    // 如果接收到有效速度指令，更新最后指令时间
+    if (Flag_move != 0) {
+        last_command_time = now;  // 记录最后一次指令时间
+        speed_command_received = true;  // 设置为已接收到指令
+    }
+
+    if(Flag_move==2){//按下 I 键 //前进
 			               speed_A= x_step;
 				       speed_B= x_step; 
 				       speed_C= x_step; 
 				       speed_D= x_step; 
 
 		            }
-       else if(Flag_move==7){//按下 < 键 //后退
+    else if(Flag_move==7){//按下 < 键 //后退
 			               speed_A= -x_step;
 				       speed_B= -x_step; 
 				       speed_C= -x_step; 
 				       speed_D= -x_step;
 			     }
 
-       else if(Flag_move==9){//按下 T 键//逆时针
+    else if(Flag_move==9){//按下 T 键//逆时针
 			               speed_A= +x_step;
 				       speed_B= -x_step; 
 				       speed_C= -x_step; 
 				       speed_D= +x_step; 
 
 			        }
-       else if(Flag_move==10){//按下 B 键//顺时针
+    else if(Flag_move==10){//按下 B 键//顺时针
 			               speed_A= -x_step;
 				       speed_B= +x_step; 
 				       speed_C= +x_step; 
 				       speed_D= -x_step;  
 
 			        }
-       else if(Flag_move==1){//按下 U 键//左斜上
+    else if(Flag_move==1){//按下 U 键//左斜上
 			               speed_A= x_step;
 				       speed_B= x_step*0.7F; 
 				       speed_C= x_step*0.5F; 
 				       speed_D= x_step*0.95F;  
 
 			        }
-       else if(Flag_move==3){//按下 O 键//右斜上
+    else if(Flag_move==3){//按下 O 键//右斜上
 			               speed_B= x_step;
 				       speed_A= x_step*0.7F; 
 				       speed_D= x_step*0.5F; 
 				       speed_C= x_step*0.95F;
 
 			        }
-	else if(Flag_move==6){//按下 M 键//左斜下
+    else if(Flag_move==6){//按下 M 键//左斜下
 			               speed_A= -x_step;
 				       speed_B= -x_step*0.7F; 
 				       speed_C= -x_step*0.5F; 
 				       speed_D= -x_step*0.95F;
 
 			        }
-        else if(Flag_move==8){//按下 > 键//右斜下
+    else if(Flag_move==8){//按下 > 键//右斜下
 			               speed_B= -x_step;
 				       speed_A= -x_step*0.7F; 
 				       speed_D= -x_step*0.5F; 
 				       speed_C= -x_step*0.95F; 
 
 			      }
-	else if(Flag_move==0){	       speed_A= 0;
-				       speed_B= 0; 
-				       speed_C= 0; 
-				       speed_D= 0;}//按下 k键//停止
+	  else if(Flag_move==0){	       
+              speed_A= 0;
+              speed_B= 0; 
+              speed_C= 0; 
+              speed_D= 0;}//按下 k键//停止
 			        
-   
-        							  /*<01>*/Data_US[0]  = Flag_start;//电机启动开关，1启动 0停止
-							          /*<02>*/Data_US[1]  = speed_A; 
-							          /*<03>*/Data_US[2]  = speed_B ; 
-							          /*<04>*/Data_US[3]  = speed_C ; 
-							          /*<05>*/Data_US[4]  = speed_D ; //ABCD四轮的当前线速度 m/s
-							          /*<06>*/Data_US[5]  = 0 ;
-							          /*<07>*/Data_US[6]  = 0 ;    
-							          /*<08>*/Data_US[7]  = 0 ;    
-							          /*<09>*/Data_US[8]  = 0 ; 
-							          /*<10>*/Data_US[9]  = 0 ;//预留位  
-							          /*<11>*/Data_US[10] = 0 ;//预留位 
-							          /*<12>*/Data_US[11] = 0 ;//预留位
+
+      /*<01>*/Data_US[0]  = Flag_start;//电机启动开关，1启动 0停止
+      /*<02>*/Data_US[1]  = speed_A; 
+      /*<03>*/Data_US[2]  = speed_B ; 
+      /*<04>*/Data_US[3]  = speed_C ; 
+      /*<05>*/Data_US[4]  = speed_D ; //ABCD四轮的当前线速度 m/s
+      /*<06>*/Data_US[5]  = 0 ;
+      /*<07>*/Data_US[6]  = 0 ;    
+      /*<08>*/Data_US[7]  = 0 ;    
+      /*<09>*/Data_US[8]  = 0 ; 
+      /*<10>*/Data_US[9]  = 0 ;//预留位  
+      /*<11>*/Data_US[10] = 0 ;//预留位 
+      /*<12>*/Data_US[11] = 0 ;//预留位
     if(++FLAG_1==2){
      FLAG_1=0,send_data();} //发送指令控制电机运行               
 }
+
+
+void check_and_stop_vehicle() {
+    rclcpp::Time now = rclcpp::Clock().now();  // 获取当前时间
+
+    // 如果接收到指令，且距离上次指令超过 3 秒，则停止车辆
+    if (speed_command_received) {
+        double elapsed_time = (now - last_command_time).seconds();  // 计算时间间隔
+        std::cout << "[DEBUG] Elapsed time since last command: " << elapsed_time << " seconds" << std::endl;
+
+        if (elapsed_time > 3.0) {
+            // 超时，停止车辆
+            Flag_move = 0;  // 设置为停止状态
+            speed_A = 0;
+            speed_B = 0;
+            speed_C = 0;
+            speed_D = 0;
+
+            // 发送停止命令
+            send_data();
+            std::cout << "[DEBUG] Sending stop command due to timeout." << std::endl;
+
+            // 重置标志
+            speed_command_received = false;
+        }
+    }
+}
+
+
 //************************接收并处理来自下位机的数据**************************// 
 //************************接收并处理来自下位机的数据**************************// 
 //************************接收并处理来自下位机的数据**************************// 
