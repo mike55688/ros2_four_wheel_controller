@@ -1,20 +1,14 @@
 <launch>
-  <node pkg="chassis_driver" exec="psub_and_RT" name="psub_and_RT" output="screen">
-    <!-- Parameter setting -->
-    <param name="rate" value="150" /> <!-- 執行頻率 -->
-    <param name="timeout" value="5" /> <!-- 距離最後一次收到命令幾秒後停止 -->
-    <param name="wheel_base" value="0.4" /> <!-- 前輪到後輪中心距離 -->
-    <param name="theta_bias" value="0.0" /> <!-- 前輪偏移，需要修正的角度 -->
-    <param name="use_imu_flag" value="False" /> <!-- 是(True)否(False)使用imu角速度計算里程計 -->
-    <param name="odom_tf_flag" value="True" /> <!-- 是(True)否(False)發布odom tf -->
-    <param name="init_fork_flag" value="False" /> <!-- 是(True)否(False)初始化時讓牙叉降到底 -->
+    <!-- 啟動整合所有功能的節點 -->
+    <node
+        name="robot_controller"
+        pkg="car_demo"
+        exec="car_demo_psub_and_RT"
+        output="screen">
+        <param name="serial_port" value="/dev/ttyUSB0" />
+        <param name="baud_rate" value="115200" />
 
-    <!-- Subscriber Topic setting -->
-    <param name="topic_cmd_vel" value="/cmd_vel" /> <!-- 速度命令 -->
-    <param name="topic_cmd_fork" value="/cmd_fork" /> <!-- 牙叉速度命令 -->
 
-    <!-- Publisher Topic setting -->
-    <param name="topic_odom" value="/odom" /> <!-- 車輪里程計 -->
-    <param name="topic_imu" value="/imu" /> <!-- IMU數值 -->
-  </node>
+          
+    </node>
 </launch>

@@ -37,7 +37,7 @@ class TF2Subscriber : public rclcpp::Node
 public:
   TF2Subscriber(): Node("TF2_Subscriber")
   {
-       subscription_ = this->create_subscription<geometry_msgs::msg::TransformStamped>("TransformBroadcaster", 
+       subscription_ = this->create_subscription<geometry_msgs::msg::TransformStamped>("odom", 
        2, std::bind(&TF2Subscriber::topic_callback, this, _1));         
   }
 private:
@@ -57,7 +57,7 @@ class VelSubscriber : public rclcpp::Node
 public:
   VelSubscriber(): Node("Vel_Subscriber")
   {
-       subscription_ = this->create_subscription<geometry_msgs::msg::Twist>("turtle1/cmd_vel", 
+       subscription_ = this->create_subscription<geometry_msgs::msg::Twist>("/cmd_vel", 
        2, std::bind(&VelSubscriber::topic_callback, this, _1));         
   } 
 private:
@@ -77,7 +77,7 @@ class PosSubscriber : public rclcpp::Node
 public:
   PosSubscriber(): Node("Pos_Subscriber")
   {
-       subscription_ = this->create_subscription<turtlesim::msg::Pose>("turtle1/pose", 
+       subscription_ = this->create_subscription<turtlesim::msg::Pose>("/pose", 
        2, std::bind(&PosSubscriber::topic_callback, this, _1));         
   }
 private:

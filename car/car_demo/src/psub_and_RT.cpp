@@ -72,7 +72,7 @@ class TF2publisher : public rclcpp::Node  //作用：發布地圖框架到基座
 public:
   TF2publisher(): Node("TF2_publisher"), count_(0)
   {
-    publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("TransformBroadcaster", 2);
+    publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("odom", 2);
     timer_ = this->create_wall_timer(25ms, std::bind(&TF2publisher::timer_callback, this));//40HZ
   }
 private:

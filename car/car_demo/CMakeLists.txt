@@ -50,3 +50,6 @@ install(TARGETS car_demo_psub_and_RT car_demo_keyboard car_demo_sub_odom
 
   
   
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
