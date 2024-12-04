@@ -15,6 +15,9 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include "tf2_ros/transform_listener.h"
 #include "tf2_ros/buffer.h"
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2_ros/transform_broadcaster.h"
+#include "nav_msgs/msg/odometry.hpp"
 
 using namespace std::chrono_literals;//命名空间
 using std::placeholders::_1;
@@ -61,43 +64,144 @@ bool speed_command_received = false;  // 用于标记是否接收到速度命令
     double vth = 0.0;
     rclcpp::Time current_time, last_time;
       
-/*###################################################################################*/ 
-  
-/*###################################################################################*/
-/*###################################################################################*/
-/*###################################################################################*/ 
+// /*###################################################################################*/ 
+// class OdometryPublisher : public rclcpp::Node
+// {
+// public:
+//     OdometryPublisher()
+//         : Node("odometry_publisher_" + std::to_string(std::rand() % 1000)), th_(0.0), vx_(0.0), vy_(0.0), vth_(0.0)
+//     {
+//         std::string odom_topic = this->declare_parameter<std::string>("odom_topic", "odom");
+//         pub_odom_ = this->create_publisher<nav_msgs::msg::Odometry>(odom_topic, 10);
+//         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
 
-class TF2publisher : public rclcpp::Node  //作用：發布地圖框架到基座框架的變換數據，用於 TF2 坐標變換和機器人導航。
+//         timer_ = this->create_wall_timer(50ms, std::bind(&OdometryPublisher::publish_odometry, this));
+
+//         last_time_ = this->get_clock()->now();
+//     }
+
+// private:
+//     void publish_odometry()
+//     {
+//         auto current_time = this->get_clock()->now();
+//         double dt = (current_time - last_time_).seconds();
+
+//         // 使用全域變數計算位置
+//         double delta_x = (vx * std::cos(th) - vy * std::sin(th)) * dt;
+//         double delta_y = (vx * std::sin(th) + vy * std::cos(th)) * dt;
+//         double delta_th = vth * dt;
+
+//         x += delta_x; // 更新全域變數 x
+//         y += delta_y; // 更新全域變數 y
+//         th += delta_th; // 更新全域變數 th
+
+//         // 更新 TF
+//         geometry_msgs::msg::TransformStamped odom_trans;
+//         odom_trans.header.stamp = current_time;
+//         odom_trans.header.frame_id = "odom";
+//         odom_trans.child_frame_id = "base_link";
+
+//         odom_trans.transform.translation.x = x;
+//         odom_trans.transform.translation.y = y;
+//         odom_trans.transform.translation.z = 0.0;
+
+//         tf2::Quaternion q;
+//         q.setRPY(0, 0, th);
+//         odom_trans.transform.rotation.x = q.x();
+//         odom_trans.transform.rotation.y = q.y();
+//         odom_trans.transform.rotation.z = q.z();
+//         odom_trans.transform.rotation.w = q.w();
+
+//         tf_broadcaster_->sendTransform(odom_trans);
+
+//         // 發布里程計數據
+//         nav_msgs::msg::Odometry odom;
+//         odom.header.stamp = current_time;
+//         odom.header.frame_id = "odom";
+
+//         odom.pose.pose.position.x = x;
+//         odom.pose.pose.position.y = y;
+//         odom.pose.pose.position.z = 0.0;
+//         odom.pose.pose.orientation.x = q.x();
+//         odom.pose.pose.orientation.y = q.y();
+//         odom.pose.pose.orientation.z = q.z();
+//         odom.pose.pose.orientation.w = q.w();
+
+//         odom.child_frame_id = "base_link";
+//         odom.twist.twist.linear.x = vx;
+//         odom.twist.twist.linear.y = vy;
+//         odom.twist.twist.angular.z = vth;
+
+//         pub_odom_->publish(odom);
+
+//         last_time_ = current_time;
+//     }
+
+//     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_;
+//     std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+//     rclcpp::TimerBase::SharedPtr timer_;
+
+//     double th_; // 使用類內變數僅存儲角度
+//     double vx_, vy_, vth_; // 臨時變數
+//     rclcpp::Time last_time_;
+// };
+/*###################################################################################*/
+class OdometryPublisher : public rclcpp::Node
 {
 public:
-  TF2publisher(): Node("TF2_publisher"), count_(0)
-  {
-    publisher_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("odom", 2);
-    timer_ = this->create_wall_timer(25ms, std::bind(&TF2publisher::timer_callback, this));//40HZ
-  }
-private:
-  void timer_callback()
-  {
-    auto odom_translation = geometry_msgs::msg::TransformStamped();  
+    OdometryPublisher()
+        : Node("odometry_publisher_" + std::to_string(std::rand() % 1000)), count_(0)
+    {
+        // 初始化話題發布器
+        pub_odom_ = this->create_publisher<geometry_msgs::msg::TransformStamped>("odom", 10);
 
-       //因为所有的里程表都是6自由度的，所以我们需要一个由偏航创建的四元数
-       //geometry_msgs::TransformStamped odom_quat = tf::createQuaternionMsgFromYaw(th);                                                                
-       //首先，我们将通过tf发布转换
-       
-    odom_translation.header.stamp = current_time;
-    odom_translation.header.frame_id = "map";
-    odom_translation.child_frame_id = "base_link";
-    //odom_translation.transform.rotation = odom_quat;
-    odom_translation.transform.translation.x = x;
-    odom_translation.transform.translation.y = y;
-    odom_translation.transform.translation.z = 0;
-          
-    publisher_->publish(odom_translation);               
-  }
-  rclcpp::TimerBase::SharedPtr timer_;
-  rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr publisher_;
-  size_t count_;
+        // 初始化 TF 發布器
+        tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+
+        // 設置計時器
+        timer_ = this->create_wall_timer(50ms, std::bind(&OdometryPublisher::publish_odometry, this));
+    }
+
+private:
+    void publish_odometry()
+    {
+        auto current_time = this->get_clock()->now();
+
+        // 創建 TransformStamped 消息
+        auto odom_translation = geometry_msgs::msg::TransformStamped();
+
+        // 設置時間戳和框架資訊
+        odom_translation.header.stamp = current_time;
+        odom_translation.header.frame_id = "odom";
+        odom_translation.child_frame_id = "base_link";
+
+        // 填寫平移部分
+        odom_translation.transform.translation.x = x;
+        odom_translation.transform.translation.y = y;
+        odom_translation.transform.translation.z = 0.0;
+
+        // 填寫旋轉部分（四元數）
+        tf2::Quaternion q;
+        q.setRPY(0, 0, th);  // 假設只有 Z 軸旋轉
+        odom_translation.transform.rotation.x = q.x();
+        odom_translation.transform.rotation.y = q.y();
+        odom_translation.transform.rotation.z = q.z();
+        odom_translation.transform.rotation.w = q.w();
+
+        // 發布 TransformStamped 到話題
+        pub_odom_->publish(odom_translation);
+
+        // 使用 TF 廣播器發布到 TF 树
+        tf_broadcaster_->sendTransform(odom_translation);
+    }
+
+    // 私有成員變數
+    rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr pub_odom_;
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    rclcpp::TimerBase::SharedPtr timer_;
+    size_t count_; // 計數變數（目前未使用）
 };
+
 /*###################################################################################*/
 /*###################################################################################*/
 /*###################################################################################*/ 
@@ -105,7 +209,7 @@ private:
 class Pospublisher : public rclcpp::Node  //發布機器人tf座標括位置 (x, y) 和方向 (theta)。此節點可用於模擬環境中監控機器人的實時位置和方向
 {
 public:
-  Pospublisher(): Node("Pos_publisher"), count_(0)
+  Pospublisher(): Node("pos_publisher_" + std::to_string(std::rand() % 1000)), count_(0)
   {
     publisher_ = this->create_publisher<turtlesim::msg::Pose>("/pose", 2);
     timer_ = this->create_wall_timer(25ms, std::bind(&Pospublisher::timer_callback, this));//40HZ
@@ -132,7 +236,7 @@ private:
 class Velpublisher : public rclcpp::Node
 {
 public:
-  Velpublisher(): Node("Vel_publisher"), count_(0)
+  Velpublisher(): Node("vel_publisher_" + std::to_string(std::rand() % 1000)), count_(0)
   {
     publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 2);
     timer_ = this->create_wall_timer(25ms, std::bind(&Velpublisher::timer_callback, this));//40HZ
@@ -158,7 +262,7 @@ private:
 class MinimalSubscriber : public rclcpp::Node
 {
 public:
-  MinimalSubscriber(): Node("minimal_sync_subscriber")
+  MinimalSubscriber(): Node("minimal_subscriber_" + std::to_string(std::rand() % 1000))
   {
        subscription_ = this->create_subscription<sensor_msgs::msg::Image>("Keyboard", 
        2, std::bind(&MinimalSubscriber::topic_callback, this, _1));    
@@ -216,10 +320,18 @@ int main(int argc, char *argv[])
   
 /*$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$*/   
 /*$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$*/ 
-  auto node1 = std::make_shared<MinimalSubscriber>(); 
-  auto node2 = std::make_shared<TF2publisher>();
-  auto node3 = std::make_shared<Pospublisher>();
-  auto node4 = std::make_shared<Velpublisher>();     
+    auto minimal_subscriber = std::make_shared<MinimalSubscriber>();
+    auto pos_publisher = std::make_shared<Pospublisher>();
+    auto vel_publisher = std::make_shared<Velpublisher>();
+    auto odom_publisher = std::make_shared<OdometryPublisher>();
+
+    // 使用 Executor 統一管理
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(minimal_subscriber);
+    executor.add_node(pos_publisher);
+    executor.add_node(vel_publisher);
+    executor.add_node(odom_publisher);
+
       rclcpp::Rate loop_rate(150);//设置循环间隔，即代码执行频率 150 HZ,
       while(rclcpp::ok()){
            check_and_stop_vehicle();
@@ -229,16 +341,13 @@ int main(int argc, char *argv[])
            process_data_and_get_odom();//根据速度姿态信息处理获得里程计数据
 				
            // 通过ROS发布tf信息 ,未完成
-          rclcpp::spin_some(node2);//调用spin_some函数，并传入节点对象指针 
-				
            // 通过ROS发布里程计信息
-          rclcpp::spin_some(node3);//调用spin_some函数，并传入节点对象指针  
-          rclcpp::spin_some(node4);//调用spin_some函数，并传入节点对象指针  
+          // 非阻塞執行節點
+          executor.spin_some();
+          
           last_time = current_time;//保存为上次时间       
-                       
-          rclcpp::spin_some(node1);//调用spin_some函数，并传入节点对象指针                                             
           process_and_send_data(aa);//处理键盘的指令并发送数据到下位机 
-       
+
          loop_rate.sleep();//循环延时时间             
       }
       
@@ -282,18 +391,16 @@ void send_data(void)
 //************************处理键盘的指令并发送数据到下位机**************************//
 //************************处理键盘的指令并发送数据到下位机**************************// 
 //************************处理键盘的指令并发送数据到下位机**************************//  
+//************************处理键盘的指令并发送数据到下位机**************************//  
 void process_and_send_data(char num)
 {       
     rclcpp::Time now = rclcpp::Clock().now();  // 获取当前时间
-
  
     if(num=='u') Flag_move=1;//按键 u 左前
     else if(num=='i') Flag_move=2;//按键 i 前
     else if(num=='o') Flag_move=3;//按键 o 右前
     
-    // else if(num=='j') Flag_move=4;//按键 j 左
     else if(num=='k') Flag_move=0;//按键 k 设置速度为0
-    // else if(num=='l') Flag_move=5;//按键 l 右
     
     else if(num=='m') Flag_move=6;//按键 m 左后
     else if(num==',') Flag_move=7;//按键 (,)(<)后
@@ -303,7 +410,7 @@ void process_and_send_data(char num)
     else if(num=='l') Flag_move=10;//按键 l 顺时针转
     
     else if(num=='q') x_step+=0.05;//按键 q 某轴速度增加++
-    else if(num=='z') x_step-=0.05;//按键 a 某轴速度减小--
+    else if(num=='z') x_step-=0.05;//按键 z 某轴速度减小--
     
     else if(num=='w') y_step+=0.05;//按键 w 某轴速度增加++
     else if(num=='x') y_step-=0.05;//按键 x 某轴速度减小--
@@ -311,10 +418,8 @@ void process_and_send_data(char num)
     else if(num=='e') z_step+=0.05;//按键 e 某轴速度增加++
     else if(num=='c') z_step-=0.05;//按键 c 某轴速度减小--
     
-    else if(num=='h') Flag_start=1;//按键 h 打开电机驱动
-    else if(num=='g') Flag_start=0;//按键 g 关闭电机驱动   
     else {Flag_move=0;}//其余按键  
-            
+
     if(x_step > +0.8)x_step = +0.8;
     if(x_step < -0.8)x_step = -0.8;
 		
@@ -323,7 +428,6 @@ void process_and_send_data(char num)
 
     if(z_step > +0.8)z_step = +0.8;
     if(z_step < -0.8)z_step = -0.8;		
-		
 
     // 如果接收到有效速度指令，更新最后指令时间
     if (Flag_move != 0) {
@@ -332,83 +436,79 @@ void process_and_send_data(char num)
     }
 
     if(Flag_move==2){//按下 I 键 //前进
-			         speed_A= x_step;
-				       speed_B= x_step; 
-				       speed_C= x_step; 
-				       speed_D= x_step; 
-
-		            }
+        speed_A= x_step;
+        speed_B= x_step; 
+        speed_C= x_step; 
+        speed_D= x_step; 
+    }
     else if(Flag_move==7){//按下 < 键 //后退
-			         speed_A= -x_step;
-				       speed_B= -x_step; 
-				       speed_C= -x_step; 
-				       speed_D= -x_step;
-			     }
-
+        speed_A= -x_step;
+        speed_B= -x_step; 
+        speed_C= -x_step; 
+        speed_D= -x_step;
+    }
     else if(Flag_move==9){//按下 J 键//逆时针
-			         speed_A= +x_step;
-				       speed_B= -x_step; 
-				       speed_C= -x_step; 
-				       speed_D= +x_step; 
-
-			        }
+        speed_A= +x_step;
+        speed_B= -x_step; 
+        speed_C= -x_step; 
+        speed_D= +x_step; 
+    }
     else if(Flag_move==10){//按下 L 键//顺时针
-			         speed_A= -x_step;
-				       speed_B= +x_step; 
-				       speed_C= +x_step; 
-				       speed_D= -x_step;  
-
-			        }
+        speed_A= -x_step;
+        speed_B= +x_step; 
+        speed_C= +x_step; 
+        speed_D= -x_step;  
+    }
     else if(Flag_move==1){//按下 U 键//左斜上
-			         speed_A= x_step;
-				       speed_B= x_step*0.7F; 
-				       speed_C= x_step*0.5F; 
-				       speed_D= x_step*0.95F;  
-
-			        }
+        speed_A= x_step;
+        speed_B= x_step*0.7F; 
+        speed_C= x_step*0.5F; 
+        speed_D= x_step*0.95F;  
+    }
     else if(Flag_move==3){//按下 O 键//右斜上
-			         speed_B= x_step;
-				       speed_A= x_step*0.7F; 
-				       speed_D= x_step*0.5F; 
-				       speed_C= x_step*0.95F;
-
-			        }
+        speed_B= x_step;
+        speed_A= x_step*0.7F; 
+        speed_D= x_step*0.5F; 
+        speed_C= x_step*0.95F;
+    }
     else if(Flag_move==6){//按下 M 键//左斜下
-			         speed_A= -x_step;
-				       speed_B= -x_step*0.7F; 
-				       speed_C= -x_step*0.5F; 
-				       speed_D= -x_step*0.95F;
-
-			        }
+        speed_A= -x_step;
+        speed_B= -x_step*0.7F; 
+        speed_C= -x_step*0.5F; 
+        speed_D= -x_step*0.95F;
+    }
     else if(Flag_move==8){//按下 > 键//右斜下
-			         speed_B= -x_step;
-				       speed_A= -x_step*0.7F; 
-				       speed_D= -x_step*0.5F; 
-				       speed_C= -x_step*0.95F; 
+        speed_B= -x_step;
+        speed_A= -x_step*0.7F; 
+        speed_D= -x_step*0.5F; 
+        speed_C= -x_step*0.95F; 
+    }
+    else if(Flag_move==0){	       
+        speed_A= 0;
+        speed_B= 0; 
+        speed_C= 0; 
+        speed_D= 0; // 停止運動
+    }
 
-			      }
-	  else if(Flag_move==0){	       
-              speed_A= 0;
-              speed_B= 0; 
-              speed_C= 0; 
-              speed_D= 0;}//按下 k键//停止
-			        
+    /*<01>*/Data_US[0]  = 1; // 默認啟動電機
+    /*<02>*/Data_US[1]  = speed_A; 
+    /*<03>*/Data_US[2]  = speed_B ; 
+    /*<04>*/Data_US[3]  = speed_C ; 
+    /*<05>*/Data_US[4]  = speed_D ; // ABCD四轮的当前线速度 m/s
+    /*<06>*/Data_US[5]  = 0 ;
+    /*<07>*/Data_US[6]  = 0 ;    
+    /*<08>*/Data_US[7]  = 0 ;    
+    /*<09>*/Data_US[8]  = 0 ; 
+    /*<10>*/Data_US[9]  = 0 ;//预留位  
+    /*<11>*/Data_US[10] = 0 ;//预留位 
+    /*<12>*/Data_US[11] = 0 ;//预留位
 
-      /*<01>*/Data_US[0]  = Flag_start;//电机启动开关，1启动 0停止
-      /*<02>*/Data_US[1]  = speed_A; 
-      /*<03>*/Data_US[2]  = speed_B ; 
-      /*<04>*/Data_US[3]  = speed_C ; 
-      /*<05>*/Data_US[4]  = speed_D ; //ABCD四轮的当前线速度 m/s
-      /*<06>*/Data_US[5]  = 0 ;
-      /*<07>*/Data_US[6]  = 0 ;    
-      /*<08>*/Data_US[7]  = 0 ;    
-      /*<09>*/Data_US[8]  = 0 ; 
-      /*<10>*/Data_US[9]  = 0 ;//预留位  
-      /*<11>*/Data_US[10] = 0 ;//预留位 
-      /*<12>*/Data_US[11] = 0 ;//预留位
-    if(++FLAG_1==2){
-     FLAG_1=0,send_data();} //发送指令控制电机运行               
+    if(++FLAG_1 == 2){
+        FLAG_1 = 0;
+        send_data(); //发送指令控制电机运行               
+    }
 }
+
 
 
 void check_and_stop_vehicle() {

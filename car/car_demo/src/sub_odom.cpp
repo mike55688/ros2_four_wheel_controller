@@ -37,7 +37,7 @@ class TF2Subscriber : public rclcpp::Node
 public:
   TF2Subscriber(): Node("TF2_Subscriber")
   {
-       subscription_ = this->create_subscription<geometry_msgs::msg::TransformStamped>("odom", 
+       subscription_ = this->create_subscription<geometry_msgs::msg::TransformStamped>("/odom", 
        2, std::bind(&TF2Subscriber::topic_callback, this, _1));         
   }
 private:

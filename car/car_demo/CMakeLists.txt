@@ -37,13 +37,13 @@ endif()
 ament_package()
 
 add_executable(car_demo_psub_and_RT src/psub_and_RT.cpp)
-ament_target_dependencies(car_demo_psub_and_RT rclcpp message_filters serial sensor_msgs turtlesim tf2 tf2_ros geometry_msgs)
+ament_target_dependencies(car_demo_psub_and_RT rclcpp message_filters serial sensor_msgs turtlesim tf2 tf2_ros geometry_msgs nav_msgs)
 
 add_executable(car_demo_keyboard src/keyboard.cpp)
-ament_target_dependencies(car_demo_keyboard rclcpp sensor_msgs)
+ament_target_dependencies(car_demo_keyboard rclcpp sensor_msgs nav_msgs)
 
 add_executable(car_demo_sub_odom src/sub_odom.cpp)
-ament_target_dependencies(car_demo_sub_odom rclcpp message_filters geometry_msgs turtlesim tf2 tf2_ros)
+ament_target_dependencies(car_demo_sub_odom rclcpp message_filters geometry_msgs turtlesim tf2 tf2_ros nav_msgs)
 
 install(TARGETS car_demo_psub_and_RT car_demo_keyboard car_demo_sub_odom
   DESTINATION lib/${PROJECT_NAME})
